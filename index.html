@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aravali Task Tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Figtree:wght@400;500;700&display=swap">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#F1F4EE;--card:#fff;--ink:#1B2620;--muted:#5E6B63;--line:#D3DBD2;--acc:#24483A;--onacc:#fff;--soft:#E3EAE1;--bad:#A4392B;--ok:#2F7A4F;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111915;--card:#1A2420;--ink:#E6ECE7;--muted:#98A79D;--line:#2C3A33;--acc:#8CC4A8;--onacc:#10201A;--soft:#233029;--bad:#E58272;--ok:#7FD0A0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111915;--card:#1A2420;--ink:#E6ECE7;--muted:#98A79D;--line:#2C3A33;--acc:#8CC4A8;--onacc:#10201A;--soft:#233029;--bad:#E58272;--ok:#7FD0A0;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,system-ui,sans-serif}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:600;margin:0 0 .4rem;line-height:1.2}
+h1{font-size:1.7rem}h2{font-size:1.25rem}h3{font-size:1.05rem}
+.wrap{max-width:860px;margin:0 auto;padding:16px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--acc);color:var(--onacc);border:0;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:500}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.bad{background:transparent;color:var(--bad);border:1px solid var(--line)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #C9962B;outline-offset:2px}
+input,select{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 12px;width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>input,.row>select{flex:1 1 150px;width:auto}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}.tabs button{background:transparent;color:var(--ink);border:1px solid var(--line)}.tabs button.on{background:var(--acc);color:var(--onacc)}
+.t{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ent{padding:10px 0;border-bottom:1px solid var(--line)}
+.ent img{display:block;width:100%;max-width:340px;border-radius:8px;margin:6px 0;border:1px solid var(--line)}
+.pill{display:inline-block;padding:1px 10px;border-radius:99px;background:var(--soft);font-size:.85rem}
+.muted{color:var(--muted)}.warn{color:var(--bad)}.ok{color:var(--ok);font-weight:500}
+.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.92rem}th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:500}
+.login{max-width:400px;margin:7vh auto}.demo{font-size:.9rem;color:var(--muted)}
+#cam{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:12px;z-index:9}
+#cam[hidden]{display:none}#cam .box{background:var(--card);border-radius:12px;padding:14px;width:100%;max-width:520px}
+#cam video,#cam canvas{width:100%;border-radius:8px;background:#000;margin-bottom:8px}
+</style></head><body><div class="wrap" id="app"></div><div id="cam" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const OUT=['The Aravali Story, Faridabad','Oakridge by The Aravali Story, Dhanaulti','Meal on Hill, Dhanaulti'];
+const KEY='aravali_tasks_v1',$=id=>document.getElementById(id),p=n=>String(n).padStart(2,'0');
+const dk=(d=new Date())=>d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+const fmt=i=>new Date(i).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+let db,imp=null,S={shift:'10:00',user:null,tab:'act',outlet:-1,date:dk(),today:dk(),msg:''},stream=null,camTask=null;
+function seed(){
+ const users=[{id:'owner',name:'Owner',pw:'owner123',role:'owner',outlet:-1}],tasks=[];
+ OUT.forEach((_,i)=>{
+  users.push({id:'manager'+(i+1),name:'Manager '+(i+1),pw:'mgr123',role:'manager',outlet:i});
+  ['Kitchen hygiene check','Cash counter and stock check'].forEach(t=>tasks.push({id:uid(),title:t,to:'manager'+(i+1),outlet:i}));
+  [1,2].forEach(k=>{const id='emp'+(i*2+k);users.push({id,name:'Employee '+(i*2+k),pw:'emp123',role:'employee',outlet:i});
+   ['Table setup before opening','Service station ready','Closing clean-up'].forEach(t=>tasks.push({id:uid(),title:t,to:id,outlet:i}))})});
+ return {users,tasks,done:{},att:{}}}
+let TOKEN=null,lastRaw='',busy=0,again=0;
+async function api(m,u,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json',Authorization:'Bearer '+TOKEN},body:b?JSON.stringify(b):undefined});
+ if(r.status===401){TOKEN=null;S.user=null;S.msg='Please sign in again.';render();throw new Error('auth')}
+ const j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');return j}
+function adopt(j){lastRaw=JSON.stringify(j.db);db=j.db;db.att=db.att||{};Object.values(db.done).forEach(r=>r.sv=1);S.user=j.me}
+function save(){if(busy){again=1;return 1}busy=1;(async()=>{do{again=0;try{
+  const d=JSON.parse(JSON.stringify(db,(k,v)=>k==='ph'&&typeof v==='string'&&!v.startsWith('data:')?undefined:v));
+  const j=await api('PUT','/api/db',{db:d});if(!again)adopt(j)}catch(e){if(e.message!=='auth')S.msg=e.message||'Could not save. Check your connection.'}}while(again);busy=0;render()})();return 1}
+async function theme(){const r=document.documentElement,d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);r.dataset.theme=d?'light':'dark'}
+function tab(t){S.tab=t;S.msg='';render()}
+/* camera: live capture only, no file upload */
+async function openCam(tid){camTask=tid;const m=$('cam');m.hidden=false;
+ m.innerHTML=`<div class="box"><h3>${esc(db.tasks.find(t=>t.id===tid).title)}</h3><video id="v" autoplay playsinline muted></video><canvas id="c" hidden></canvas><p id="cm" class="muted">Point the camera at the finished task.</p>
+ <div class="row"><button id="shot" onclick="snap()">Take photo</button><button id="use" hidden onclick="useShot()">Submit photo</button><button id="re" class="ghost" hidden onclick="retake()">Retake</button><button class="ghost" onclick="closeCam()">Cancel</button></div></div>`;
+ try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});$('v').srcObject=stream}
+ catch(e){$('cm').className='warn';$('cm').textContent='Camera is blocked or unavailable. Allow camera access in your browser, or open this link directly in Chrome or Safari on your phone.';$('shot').disabled=true}}
+function snap(){const v=$('v'),c=$('c');if(!v.videoWidth){$('cm').textContent='Camera is still starting. Try again in a moment.';return}
+ const w=640,h=Math.round(w*v.videoHeight/v.videoWidth);c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(v,0,0,w,h);
+ x.fillStyle='rgba(0,0,0,.6)';x.fillRect(0,h-28,w,28);x.fillStyle='#fff';x.font='14px sans-serif';x.fillText(fmt(new Date())+'  |  '+S.user.name,8,h-9);
+ v.hidden=true;c.hidden=false;$('shot').hidden=true;$('use').hidden=false;$('re').hidden=false;$('cm').textContent='Check the photo, then submit.'}
+function retake(){$('v').hidden=false;$('c').hidden=true;$('shot').hidden=false;$('use').hidden=true;$('re').hidden=true}
+function useShot(){const k=camTask+'|'+dk();if(db.done[k]){closeCam();return}
+ db.done[k]={uid:S.user.id,at:new Date().toISOString(),ph:$('c').toDataURL('image/jpeg',.6),fo:'',fm:''};
+ if(!save())delete db.done[k];closeCam();render()}
+function closeCam(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('cam').hidden=true;$('cam').innerHTML=''}
+/* feedback: owner writes owner feedback, manager writes manager feedback */
+function fb(k){const f=S.user.role==='owner'?'fo':'fm';db.done[k][f]=$('f'+k).value.trim();save();render()}
+function addTask(){const to=$('tt').value,t=$('tn').value.trim();if(!t||!to){S.msg='Choose a person and write the task.';return render()}
+ db.tasks.push({id:uid(),title:t,to,outlet:user(to).outlet});save();S.msg='Task added. It repeats every day.';render()}
+function delTask(id){db.tasks=db.tasks.filter(t=>t.id!==id);save();render()}
+function addUser(){const u=S.user,n=$('un').value.trim(),id=$('ui').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,''),pw=$('up').value;
+ const role=u.role==='owner'?$('ur').value:'employee',o=u.role==='owner'?+$('uo').value:u.outlet;
+ if(!n||!id||pw.length<4)return(S.msg='Enter a name, a login ID and a password of at least 4 characters.',render());
+ if(user(id))return(S.msg='That login ID is taken. Pick another.',render());
+ db.users.push({id,name:n,pw,role,outlet:o});save();S.msg='Created '+n+'. Login ID: '+id;render()}
+function delUser(id){if(!confirm('Remove this person and their tasks?'))return;db.users=db.users.filter(x=>x.id!==id);db.tasks=db.tasks.filter(t=>t.to!==id);save();render()}
+function setO(v){S.outlet=+v;render()}function setD(v){S.date=v||dk();render()}
+/* attendance import and scores */
+const lastDays=n=>Array.from({length:n},(_,i)=>dk(new Date(Date.now()-i*864e5)));
+const fm=m=>m==null?'–':p(Math.floor(m/60))+':'+p(m%60);
+function csvParse(t){const rows=[];let r=[],c='',q=0;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=0}else c+=ch}else if(ch==='"')q=1;else if(ch===','||ch==='\t'||ch===';'){r.push(c);c=''}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);rows.push(r);r=[];c=''}else c+=ch}if(c||r.length){r.push(c);rows.push(r)}return rows.filter(x=>x.some(v=>v.trim()))}
+function pDate(s){s=String(s).trim();const m=s.match(/(\d{1,4})[-\/.](\d{1,2})[-\/.](\d{1,4})/);
+ if(m){const a=+m[1],b=+m[2],c=+m[3];let y,mo=b,d;if(a>31){y=a;d=c}else{d=a;y=c<100?2000+c:c}if(mo>12||d>31)return null;return y+'-'+p(mo)+'-'+p(d)}
+ const t=Date.parse(s);return isNaN(t)?null:dk(new Date(t))}
+function pTime(s){const m=String(s).match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?/);if(!m)return null;let h=+m[1];const ap=(m[3]||'').toLowerCase();if(ap==='pm'&&h<12)h+=12;if(ap==='am'&&h===12)h=0;return h*60+(+m[2])}
+function pickFile(inp){const f=inp.files[0];if(!f)return;const rd=new FileReader();
+ const ok=t=>{const r=csvParse(t);if(r.length<2){S.msg='That file looks empty.';return render()}imp={head:r[0].map(h=>h.trim()),rows:r.slice(1)};S.msg='';render()};
+ if(/\.xlsx?$/i.test(f.name)){if(!window.XLSX){S.msg='Excel reading did not load. Save the file as CSV and upload that.';return render()}rd.onload=e=>ok(XLSX.utils.sheet_to_csv(XLSX.read(e.target.result,{type:'array'}).Sheets[XLSX.read(e.target.result,{type:'array'}).SheetNames[0]]));rd.readAsArrayBuffer(f)}
+ else{rd.onload=e=>ok(e.target.result);rd.readAsText(f)}}
+function doImport(){const g=id=>+$(id).value,ce=g('m_emp'),cd=g('m_date'),ci=g('m_in'),co=g('m_out'),cs=g('m_st');
+ if(ce<0||(cd<0&&ci<0)){S.msg='Choose the employee column and either a date or a punch-in column.';return render()}
+ const sh=S.shift.split(':'),lim=+sh[0]*60+(+sh[1]||0)+15,pp=scope(),nz=s=>String(s).toLowerCase().replace(/\s+/g,''),agg={},miss=new Set();
+ imp.rows.forEach(r=>{const raw=(r[ce]||'').trim();if(!raw)return;const e=pp.find(x=>nz(x.name)===nz(raw)||x.id===nz(raw));if(!e){miss.add(raw);return}
+  const d=pDate(r[cd>=0?cd:ci]||'');if(!d)return;const k=e.id+'|'+d,a=agg[k]||(agg[k]={ts:[]});
+  [ci,co].forEach(c=>{if(c>=0){const m=pTime(r[c]||'');if(m!=null)a.ts.push(m)}});
+  const ab=cs>=0&&/absent|leave|^\s*(a|ab|l)\s*$/i.test(r[cs]||'');a.ab=a.ab===undefined?ab:a.ab&&ab});
+ let n=0;Object.keys(agg).forEach(k=>{const a=agg[k];if(a.ab)db.att[k]={st:'A'};else{const mn=a.ts.length?Math.min(...a.ts):null;db.att[k]={st:'P',in:mn,out:a.ts.length>1?Math.max(...a.ts):null,late:mn!=null&&mn>lim?1:0}}n++});
+ save();imp=null;S.msg='Imported '+n+' attendance records.'+(miss.size?' Not matched: '+[...miss].slice(0,8).join(', ')+(miss.size>8?'…':'')+'. Names must match People exactly, or use the login ID.':'');render()}
+function markAtt(id,st){db.att[id+'|'+dk()]=st==='A'?{st:'A'}:{st:'P',in:null,out:null,late:0};save();render()}
+function attOf(e){const ds=lastDays(14),od=db.users.filter(x=>x.outlet===e.outlet).map(x=>x.id),act=ds.filter(d=>od.some(i=>db.att[i+'|'+d]));let pr=0,late=0;
+ act.forEach(d=>{const a=db.att[e.id+'|'+d];if(a&&a.st!=='A'){pr++;if(a.late)late++}});return {days:act.length,pr,late,f:act.length?(pr-late*.5)/act.length:null}}
+function taskOf(e){const ds=lastDays(14),ids=db.tasks.filter(t=>t.to===e.id).map(t=>t.id),ou=db.users.filter(x=>x.outlet===e.outlet).map(x=>x.id),
+ act=ds.filter(d=>db.tasks.some(t=>ou.includes(t.to)&&db.done[t.id+'|'+d]));let dn=0;act.forEach(d=>ids.forEach(i=>{if(db.done[i+'|'+d])dn++}));const ex=act.length*ids.length;return {dn,ex,f:ex?dn/ex:null}}
+function totalOf(a,t){const q=[[a.f,30],[t.f,70]].filter(x=>x[0]!=null);return q.length?Math.round(q.reduce((s,x)=>s+x[0]*x[1],0)/q.reduce((s,x)=>s+x[1],0)*100):null}
+function vAtt(){const u=S.user,emp=u.role==='employee',pp=emp?[u]:scope(),td=dk();let h='';
+ if(!emp){h+=`<div class="card"><h2>Import attendance</h2><p class="muted">Download the attendance or activity log from Petpooja Payroll as CSV or Excel and upload it here. Employee names must match the names in People, or use the login ID.</p>
+ <div class="row"><input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" onchange="pickFile(this)" aria-label="Attendance file"><label>Shift starts <input type="time" value="${S.shift}" onchange="S.shift=this.value" style="width:auto"></label></div>`;
+  if(imp){const gi=(re,sk)=>imp.head.findIndex((x,i)=>i!==sk&&re.test(x)),go=gi(/out.?time|punch.?out|check.?out|clock.?out|^out$|last/i),gn=gi(/in.?time|punch.?in|check.?in|clock.?in|^in$|first|punch|time/i,go),gd=gi(/date|day/i),gs=gi(/status|attendance|present/i),ge=gi(/name/i)>=0?gi(/name/i):gi(/emp/i);
+   const sel=(id,l,g)=>`<label class="muted">${l}<br><select id="${id}"><option value="-1">Not in file</option>${imp.head.map((x,i)=>`<option value="${i}" ${i===g?'selected':''}>${esc(x)}</option>`).join('')}</select></label>`;
+   h+=`<div class="row" style="margin-top:10px">${sel('m_emp','Employee',ge)}${sel('m_date','Date',gd)}${sel('m_in','Punch-in time',gn)}${sel('m_out','Punch-out time',go)}${sel('m_st','Status (optional)',gs)}</div><p class="muted">${imp.rows.length} rows found. Check the columns, then import.</p><button onclick="doImport()">Import ${imp.rows.length} rows</button>`}
+  h+='</div>'}
+ if(S.user.role==='owner')h+=`<div class="row" style="margin-bottom:10px">${outSel()}</div>`;
+ h+=`<div class="card scroll"><h2>Scores, last 14 days</h2><p class="muted">Out of 100: attendance 30 and photo tasks 70. A late arrival (over 15 minutes after shift start) counts as half a day. Days with no imported data are not counted against anyone.</p>
+ <table><tr><th>Name</th><th>Attendance</th><th>Tasks</th><th>Score</th>${emp?'':'<th>Today</th>'}</tr>
+ ${pp.map(e=>{const a=attOf(e),t=taskOf(e),s=totalOf(a,t),r=db.att[e.id+'|'+td];return `<tr><td>${esc(e.name)}</td><td>${a.days?a.pr+' of '+a.days+' days'+(a.late?', '+a.late+' late':''):'No data'}</td><td>${t.ex?t.dn+' of '+t.ex:'No data'}</td><td><b>${s==null?'–':s}</b></td>
+ ${emp?'':`<td>${r?(r.st==='A'?'<span class="warn">Absent</span>':'<span class="ok">Present'+(r.in!=null?' '+fm(r.in):'')+'</span>'):'<span class="muted">Not marked</span>'} <button class="ghost" onclick="markAtt('${e.id}','P')">Present</button> <button class="bad" onclick="markAtt('${e.id}','A')">Absent</button></td>`}</tr>`}).join('')}</table></div>`;
+ return h}
+/* views */
+function vLogin(){return `<div class="login card"><h1>Aravali Task Tracker</h1><p class="muted">Sign in to see today’s tasks.</p>
+ <p><label>Login ID<br><input id="lid" autocomplete="username"></label></p><p><label>Password<br><input id="lpw" type="password" autocomplete="current-password"></label></p>
+ <p class="warn">${esc(S.msg)}</p><button onclick="login()">Sign in</button>
+ <p class="demo">Ask the owner for your login ID and password.</p></div>`}
+function vMy(){const u=S.user,d=dk(),ts=db.tasks.filter(t=>t.to===u.id),n=ts.filter(t=>db.done[t.id+'|'+d]).length;
+ return `<div class="card"><h2>Today’s tasks: ${n} of ${ts.length} done</h2><p class="muted">Tasks reset every day at 12:00 am. Each task needs a live photo.</p>
+ ${ts.map(t=>{const r=db.done[t.id+'|'+d];return r?`<div class="ent"><b>${esc(t.title)}</b> <span class="ok">Done ${fmt(r.at)}</span><img src="${r.ph}" alt="Task photo">${fbView(r)}</div>`
+ :`<div class="t"><span>${esc(t.title)}</span><button onclick="openCam('${t.id}')">Take photo</button></div>`}).join('')||'<p class="muted">No tasks assigned yet. Ask your manager.</p>'}</div>`}
+function fbView(r,edit,k){const u=S.user;
+ const o=edit&&u.role==='owner',m=edit&&u.role==='manager';
+ return `<div class="muted">Manager feedback: ${esc(r.fm)||'none yet'}</div><div class="muted">Owner feedback: ${esc(r.fo)||'none yet'}</div>`+
+ (edit?`<div class="row" style="margin-top:6px"><input id="f${k}" placeholder="Your feedback" value="${esc(u.role==='owner'?r.fo:r.fm)}"><button class="ghost" onclick="fb('${k}')">Save feedback</button></div>`:'')}
+function vAct(){const d=S.date,pp=scope(),all=pp.flatMap(e=>db.tasks.filter(t=>t.to===e.id)),dn=all.filter(t=>db.done[t.id+'|'+d]).length;
+ return `<div class="card"><div class="row"><input type="date" value="${d}" max="${dk()}" onchange="setD(this.value)" aria-label="Date">${S.user.role==='owner'?outSel():''}</div>
+ <h2 style="margin-top:10px">${dn} of ${all.length} tasks done${d===dk()?' today':' on '+d}</h2></div>`+
+ pp.map(e=>{const ts=db.tasks.filter(t=>t.to===e.id),n=ts.filter(t=>db.done[t.id+'|'+d]).length;
+ return `<div class="card"><h3>${esc(e.name)} <span class="pill">${e.role}</span></h3><p class="muted">${esc(OUT[e.outlet])}. ${n} of ${ts.length} done</p>
+ ${ts.map(t=>{const k=t.id+'|'+d,r=db.done[k];return r?`<div class="ent"><b>${esc(t.title)}</b> <span class="ok">Done ${fmt(r.at)}</span><img src="${r.ph}" alt="Task photo">${fbView(r,1,k)}</div>`
+ :`<div class="t"><span>${esc(t.title)}</span><span class="warn">Not done</span></div>`}).join('')||'<p class="muted">No tasks assigned.</p>'}</div>`}).join('')||'<p class="muted">No team members yet. Add people in the People tab.</p>'}
+function outSel(){return `<select onchange="setO(this.value)" aria-label="Outlet"><option value="-1">All outlets</option>${OUT.map((x,i)=>`<option value="${i}" ${S.outlet===i?'selected':''}>${esc(x)}</option>`).join('')}</select>`}
+function vTasks(){const pp=scope();
+ return `<div class="card"><h2>Assign a daily task</h2>${S.user.role==='owner'?'<div class="row">'+outSel()+'</div>':''}
+ <div class="row" style="margin-top:8px"><select id="tt">${pp.map(e=>`<option value="${e.id}">${esc(e.name)} (${e.role})</option>`).join('')}</select><input id="tn" placeholder="Task, e.g. Wipe all tables"><button onclick="addTask()">Add task</button></div></div>
+ ${pp.map(e=>`<div class="card"><h3>${esc(e.name)}</h3>${db.tasks.filter(t=>t.to===e.id).map(t=>`<div class="t"><span>${esc(t.title)}</span><button class="bad" onclick="delTask('${t.id}')">Delete</button></div>`).join('')||'<p class="muted">No tasks.</p>'}</div>`).join('')}`}
+function vPeople(){const u=S.user,o=u.role==='owner',pp=scope();
+ return `<div class="card"><h2>Create a login</h2><div class="row"><input id="un" placeholder="Full name"><input id="ui" placeholder="Login ID"><input id="up" placeholder="Password" type="text">
+ ${o?`<select id="ur"><option value="manager">Manager</option><option value="employee">Employee</option></select><select id="uo">${OUT.map((x,i)=>`<option value="${i}">${esc(x)}</option>`).join('')}</select>`:`<span class="muted">Employee at ${esc(OUT[u.outlet])}</span>`}
+ <button onclick="addUser()">Create login</button></div></div>
+ <div class="card scroll"><h2>Team logins</h2><table><tr><th>Name</th><th>Role</th><th>Outlet</th><th>Login ID</th><th>Password</th><th></th></tr>
+ ${pp.map(e=>`<tr><td>${esc(e.name)}</td><td>${e.role}</td><td>${esc(OUT[e.outlet])}</td><td>${esc(e.id)}</td><td>${esc(e.pw)}</td><td><button class="bad" onclick="delUser('${e.id}')">Remove</button></td></tr>`).join('')}</table></div>`}
+function render(){const a=$('app'),u=S.user;if(!u){a.innerHTML=vLogin();return}
+ const mgr=u.role!=='employee',tabs=mgr?[['act','Team activity'],...(u.role==='manager'?[['my','My tasks']]:[]),['att','Attendance & score'],['tasks','Assign tasks'],['people','People']]:[['my','My tasks'],['att','My score']];
+ a.innerHTML=`<div class="top"><div><h1>${esc(u.name)}</h1><span class="muted">${u.role}${u.outlet>=0?', '+esc(OUT[u.outlet]):''}. ${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</span></div>
+ <div class="row"><button class="ghost" onclick="theme()">Light / dark</button><button class="ghost" onclick="chpw()">Change password</button><button class="ghost" onclick="logout()">Sign out</button></div></div>
+ <div class="tabs">${tabs.map(([k,l])=>`<button class="${S.tab===k?'on':''}" onclick="tab('${k}')">${l}</button>`).join('')}</div><p class="${S.msg.startsWith('Created')||S.msg.startsWith('Task')||S.msg.startsWith('Imported')?'ok':'warn'}">${esc(S.msg)}</p>`+
+ ({my:vMy,act:vAct,att:vAtt,tasks:vTasks,people:vPeople}[S.tab]||vMy)()}
+setInterval(()=>{if(dk()!==S.today){S.today=dk();S.date=S.today;if(!$('cam').hidden)closeCam();render()}},15000);
+boot();
+</script></body></html>
